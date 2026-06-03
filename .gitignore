@@ -1,0 +1,26 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Runtime data
+backend/venv/
+backend/interview_ace.db
+backend/app/uploads/
+backend/.env
+
+# Dependency directories
+frontend/node_modules/
+frontend/jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Output build
+frontend/dist/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
