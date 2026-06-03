@@ -17,6 +17,7 @@ class User(Base):
     interviews = relationship("Interview", back_populates="user", cascade="all, delete-orphan")
     submissions = relationship("CodingSubmission", back_populates="user", cascade="all, delete-orphan")
     roadmap = relationship("Roadmap", uselist=False, back_populates="user", cascade="all, delete-orphan")
+    history = relationship("UserQuestionHistory", back_populates="user", cascade="all, delete-orphan")
 
 class Resume(Base):
     __tablename__ = "resumes"
@@ -96,3 +97,23 @@ class Roadmap(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="roadmap")
+
+class QuestionBank(Base):
+    __tablename__ = "question_bank"
+
+    id = Column(Integer, primary_key=True, index=True)
+    category = Column(String(50), index=True, nullable=False)      # HR, Java, DBMS, OOP, DSA, OS, CN
+    difficulty = Column(String(20), index=True, nullable=False)    # Easy, Medium, Hard
+    question_text = Column(Text, nullable=False)
+    ideal_answer = Column(Text, nullable=False)
+
+class UserQuestionHistory(Base):
+    __tablename__ = "user_question_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    question_bank_id = Column(Integer, ForeignKey("question_bank.id", ondelete="CASCADE"), nullable=False)
+    asked_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="history")
+    question_bank = relationship("QuestionBank")

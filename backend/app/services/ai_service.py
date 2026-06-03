@@ -29,7 +29,6 @@ def call_gemini(prompt: str, response_json: bool = True) -> str:
 def parse_resume(pdf_text: str) -> dict:
     """Parses resume text using Gemini to extract skills, education, projects, certifications, and calculate ATS score"""
     if use_mock or not pdf_text:
-        # High fidelity mock resume parse
         return {
             "skills": ["Java", "Python", "SQL", "Data Structures", "Algorithms", "FastAPI", "React"],
             "education": ["B.Tech in Computer Science and Engineering, GPA: 8.9"],
@@ -59,7 +58,6 @@ def parse_resume(pdf_text: str) -> dict:
         except Exception:
             pass
             
-    # Fallback mock if parse fails
     return {
         "skills": ["Extraction Failed - Standard Skills Assumed: Java", "Python", "SQL", "DSA"],
         "education": ["CS Student"],
@@ -69,46 +67,73 @@ def parse_resume(pdf_text: str) -> dict:
         "career_guidance": "Could not parse resume text accurately. Please ensure the PDF contains selectable text."
     }
 
-def generate_questions(interview_type: str, difficulty: str, skills: list, history: list = None) -> list:
-    """Generates mock interview questions"""
+def generate_dynamic_questions(interview_type: str, difficulty: str, skills: list, count: int = 2) -> list:
+    """Generates 2-3 dynamic interview questions using Gemini with custom templates for companies"""
+    skills_str = ", ".join(skills) if skills else "OOP, DSA, Databases, System Design"
+    
     if use_mock:
-        # Standard high-fidelity interview sets
-        if "HR" in interview_type.upper():
+        # High fidelity mock generator for company specific questions
+        if "GOOGLE" in interview_type.upper():
             return [
                 {
-                    "question_text": "Tell me about yourself and your background.",
-                    "ideal_answer": "Provide a structured pitch: Present self and core stack, highlight 1-2 major achievements or projects, and explain why you're a good fit for this role."
+                    "question_text": "Describe how you would design a globally distributed cache system (like Memcached) for Google Search. How do you handle consistency?",
+                    "ideal_answer": "Detail consistency hashing, read-through/write-through policies, replication, and latency reductions using edge servers."
                 },
                 {
-                    "question_text": "Describe a challenging technical situation you faced and how you overcame it.",
-                    "ideal_answer": "Use the STAR method: Situation, Task, Action, Result. Highlight problem-solving, collaboration, and learnings from the issue."
+                    "question_text": "Given a stream of integers, how do you find the median at any point in time with O(1) retrieval?",
+                    "ideal_answer": "Use a Min-Heap and a Max-Heap. Maintain heaps sizes balanced (difference <= 1). Median is root of the larger heap, or average of both roots if sizes are equal."
+                }
+            ]
+        elif "AMAZON" in interview_type.upper():
+            return [
+                {
+                    "question_text": "Amazon Customer Experience: How would you design a product recommendation system that scales to 100M+ active daily users?",
+                    "ideal_answer": "Focus on collaborative filtering, vector embeddings, database sharding, caching layers (Redis), and event-driven updates (Kafka)."
                 },
                 {
-                    "question_text": "Where do you see yourself in five years?",
-                    "ideal_answer": "Align personal aspirations with the company's growth. Emphasize mastering technical skills, taking ownership of features, and eventually mentoring juniors."
+                    "question_text": "Explain Amazon's Leadership Principle: 'Customer Obsession'. How would you apply it to resolve a buggy checkout line API issue?",
+                    "ideal_answer": "Explain the priority of immediate fallback systems, clear communication, and post-mortem review to prevent repeated client outages."
+                }
+            ]
+        elif "TCS" in interview_type.upper() or "INFOSYS" in interview_type.upper() or "WIPRO" in interview_type.upper() or "ACCENTURE" in interview_type.upper():
+            return [
+                {
+                    "question_text": f"Explain compilation phases and exception handling hierarchies in {skills[0] if skills else 'programming'}.",
+                    "ideal_answer": "Detail parsing, syntax tree generation, compilation to bytecode, and try-catch blocks with unchecked exceptions."
+                },
+                {
+                    "question_text": "How do you explain the difference between static binding and dynamic binding with a coding example?",
+                    "ideal_answer": "Static binding occurs at compile time (overloading). Dynamic binding occurs at runtime (overriding method of parent class)."
                 }
             ]
         else:
-            # Technical Mock Questions
             return [
                 {
-                    "question_text": f"Explain the difference between abstract classes and interfaces in {skills[0] if skills else 'OOP'}. When would you use which?",
-                    "ideal_answer": "Abstract classes can have state (fields) and default behavior (implemented methods), support single inheritance. Interfaces define a contract (methods), support multiple inheritance. Use interfaces for api contracts, and abstract classes for base shared behavior."
+                    "question_text": f"Explain dynamic memory management and pointer usage in {skills[0] if skills else 'OOP'}.",
+                    "ideal_answer": "Detail heap vs stack allocations, memory leak prevention, and destructors/smart pointers."
                 },
                 {
-                    "question_text": "What is a transaction in DBMS? Explain ACID properties with a real-world example.",
-                    "ideal_answer": "A transaction is a logical unit of database processing. ACID: Atomicity (all or nothing), Consistency (preserves DB invariants), Isolation (transactions execution separate), Durability (persisted on disk). Example: Bank transfer."
-                },
-                {
-                    "question_text": "Given an unsorted array, how do you find the duplicates in linear time and O(1) extra space?",
-                    "ideal_answer": "For elements range [1, N], use the index-as-hash technique (marking elements negative). Alternatively, if elements can be anything, a hashset takes O(N) space, while sorting takes O(N log N). Under constraint of O(1) space and O(N) time, we modify the array elements in place using index marking if values are constrained, otherwise it's impossible without constraints."
+                    "question_text": "How would you solve standard concurrency race conditions in a multithreaded application?",
+                    "ideal_answer": "Explain mutex locks, synchronized code locks, semaphore flags, and volatile memory caches."
                 }
             ]
 
-    skills_str = ", ".join(skills) if skills else "Java, Python, SQL, Operating Systems, DSA"
+    # Gemini call
+    company_style = ""
+    if "GOOGLE" in interview_type.upper():
+        company_style = "Google-style technical questions focusing on high-performance scale, system design, and advanced data structures (graphs, trees)."
+    elif "AMAZON" in interview_type.upper():
+        company_style = "Amazon-style technical questions focusing on distributed systems, optimization, and Amazon Leadership Principles."
+    elif "MICROSOFT" in interview_type.upper():
+        company_style = "Microsoft-style technical questions focusing on low-level resource management, system APIs, OS concepts, and algorithmic efficiency."
+    elif "TCS" in interview_type.upper() or "INFOSYS" in interview_type.upper() or "WIPRO" in interview_type.upper() or "ACCENTURE" in interview_type.upper():
+        company_style = "Service company style questions focusing on core programming syntax (Java/Python), SQL queries, basic DSA (Arrays/Linked Lists), and OOP concepts."
+    
     prompt = f"""
-    Generate 3 interview questions for a {interview_type} mock interview at {difficulty} level.
+    Generate {count} unique and highly specific interview questions for a {interview_type} mock interview at {difficulty} level.
     The candidate has skills in: {skills_str}.
+    Style guideline: {company_style if company_style else 'Standard high-quality technical/behavioral questions.'}
+    
     Provide the output in JSON format as a list of objects. Each object must have:
     - question_text (string)
     - ideal_answer (string detailing the key points that should be in a perfect answer)
@@ -121,13 +146,16 @@ def generate_questions(interview_type: str, difficulty: str, skills: list, histo
         except Exception:
             pass
             
-    # Standard fallback questions
-    return generate_questions("HR", "Medium", [])
+    # Mock fallback
+    return generate_dynamic_questions(interview_type, difficulty, skills, count)
+
+def generate_questions(interview_type: str, difficulty: str, skills: list, history: list = None) -> list:
+    """Legacy question generator (unused now, we query from question bank)"""
+    return generate_dynamic_questions(interview_type, difficulty, skills, 3)
 
 def evaluate_answer(question_text: str, user_answer: str, ideal_answer: str) -> dict:
     """Evaluates a user answer"""
     if use_mock:
-        # High fidelity mock evaluator
         return {
             "score": 7.8,
             "feedback_accuracy": "The answer is conceptually correct and covers the main topics (e.g. definitions and usage).",

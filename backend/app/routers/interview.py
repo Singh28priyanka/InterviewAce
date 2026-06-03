@@ -1,4 +1,5 @@
 import json
+import random
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..database import get_db
@@ -13,7 +14,74 @@ def start_interview(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(security.get_current_user)
 ):
-    # Fetch skills from user's latest resume if exists
+    # 1. Map interview_type to relevant question bank categories
+    target_categories = []
+    if "HR" in payload.interview_type.upper():
+        target_categories = ["HR"]
+    else:
+        # Technical or Company Mode
+        target_categories = ["Java", "DBMS", "OOP", "DSA", "OS", "CN"]
+
+    # 2. Get user's previously asked questions IDs
+    user_history = db.query(models.UserQuestionHistory).filter(
+        models.UserQuestionHistory.user_id == current_user.id
+    ).all()
+    
+    asked_ids = [h.question_bank_id for h in user_history]
+
+    # Query all matching questions from bank
+    all_bank_questions = db.query(models.QuestionBank).filter(
+        models.QuestionBank.category.in_(target_categories)
+    ).all()
+
+    if not all_bank_questions:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No questions available in the question bank for this category"
+        )
+
+    # 3. Categorize into unseen and seen
+    unseen = [q for q in all_bank_questions if q.id not in asked_ids]
+
+    # 4. Selection algorithm (pull 2 questions from bank, prioritize unseen)
+    selected_bank_objs = []
+    
+    if len(unseen) >= 2:
+        selected_bank_objs = random.sample(unseen, 2)
+    elif len(unseen) == 1:
+        selected_bank_objs.append(unseen[0])
+        # Pool exhausted, clear history for user in these categories to reshuffle
+        db.query(models.UserQuestionHistory).filter(
+            models.UserQuestionHistory.user_id == current_user.id,
+            models.UserQuestionHistory.question_bank_id.in_([q.id for q in all_bank_questions])
+        ).delete(synchronize_session=False)
+        db.commit()
+        
+        # Pull remaining 1 from the freshly reset pool
+        reset_pool = [q for q in all_bank_questions if q.id != selected_bank_objs[0].id]
+        if reset_pool:
+            selected_bank_objs.append(random.choice(reset_pool))
+    else:
+        # Fully exhausted, clear history for user in these categories to reshuffle
+        db.query(models.UserQuestionHistory).filter(
+            models.UserQuestionHistory.user_id == current_user.id,
+            models.UserQuestionHistory.question_bank_id.in_([q.id for q in all_bank_questions])
+        ).delete(synchronize_session=False)
+        db.commit()
+        
+        # Sample 2 from the freshly reset pool
+        selected_bank_objs = random.sample(all_bank_questions, min(2, len(all_bank_questions)))
+
+    # Save selected questions to UserQuestionHistory
+    for bq in selected_bank_objs:
+        hist_entry = models.UserQuestionHistory(
+            user_id=current_user.id,
+            question_bank_id=bq.id
+        )
+        db.add(hist_entry)
+    db.commit()
+
+    # 5. Fetch user skills from resume to customize Gemini dynamic generation
     skills = []
     resume = db.query(models.Resume).filter(models.Resume.user_id == current_user.id).first()
     if resume and resume.parsed_skills:
@@ -21,15 +89,16 @@ def start_interview(
             skills = json.loads(resume.parsed_skills)
         except Exception:
             pass
-            
-    # Generate questions using AI
-    questions_data = ai_service.generate_questions(
+
+    # 6. Generate 2 dynamic custom questions using Gemini API
+    dynamic_questions = ai_service.generate_dynamic_questions(
         interview_type=payload.interview_type,
         difficulty=payload.difficulty,
-        skills=skills
+        skills=skills,
+        count=2
     )
-    
-    # Save Interview
+
+    # 7. Save Interview
     db_interview = models.Interview(
         user_id=current_user.id,
         interview_type=payload.interview_type,
@@ -40,22 +109,28 @@ def start_interview(
     db.add(db_interview)
     db.commit()
     db.refresh(db_interview)
-    
-    # Save Questions
-    db_questions = []
-    for q in questions_data:
+
+    # 8. Save combined questions
+    # Combined list: 2 from bank + 2 dynamic
+    for q_obj in selected_bank_objs:
         db_q = models.Question(
             interview_id=db_interview.id,
-            question_text=q.get("question_text", ""),
-            ideal_answer=q.get("ideal_answer", ""),
+            question_text=q_obj.question_text,
+            ideal_answer=q_obj.ideal_answer,
             score=0.0
         )
         db.add(db_q)
-        db_questions.append(db_q)
-        
+
+    for q_dict in dynamic_questions:
+        db_q = models.Question(
+            interview_id=db_interview.id,
+            question_text=q_dict.get("question_text", ""),
+            ideal_answer=q_dict.get("ideal_answer", ""),
+            score=0.0
+        )
+        db.add(db_q)
+
     db.commit()
-    
-    # Refresh to return full relationships
     db.refresh(db_interview)
     return db_interview
 
@@ -83,7 +158,6 @@ def submit_answers(
             detail="Interview already evaluated and completed"
         )
         
-    # Map answers by question_id
     answers_map = {ans.question_id: ans.answer_text for ans in payload.answers}
     
     total_score = 0.0
@@ -93,7 +167,6 @@ def submit_answers(
         user_ans = answers_map.get(db_q.id, "")
         db_q.user_answer = user_ans
         
-        # Call AI evaluator
         eval_result = ai_service.evaluate_answer(
             question_text=db_q.question_text,
             user_answer=user_ans,
@@ -109,7 +182,6 @@ def submit_answers(
         db_q.feedback_strengths = eval_result.get("feedback_strengths", "")
         db_q.feedback_weaknesses = eval_result.get("feedback_weaknesses", "")
         
-        # If suggested answer returned, update ideal_answer
         if eval_result.get("suggested_answer"):
             db_q.ideal_answer = eval_result.get("suggested_answer")
             
