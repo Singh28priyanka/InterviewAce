@@ -95,6 +95,8 @@ class InterviewDetailResponse(InterviewResponse):
 class AnswerSubmit(BaseModel):
     question_id: int
     answer_text: str
+    wpm: Optional[float] = None
+    filler_words_count: Optional[int] = None
 
 class InterviewSubmit(BaseModel):
     answers: List[AnswerSubmit]
@@ -138,6 +140,53 @@ class CodingProblemResponse(BaseModel):
     template_python: str
     template_java: str
     template_cpp: str
+
+    class Config:
+        from_attributes = True
+
+
+class CodingHintRequest(BaseModel):
+    problem_title: str
+    language: str
+    code: str
+    chat_history: Optional[List[dict]] = []
+    message: str
+
+class CodingHintResponse(BaseModel):
+    hint: str
+
+class JobDescriptionMatchRequest(BaseModel):
+    jd_text: str
+
+class JobDescriptionMatchResponse(BaseModel):
+    match_score: float
+    missing_keywords: List[str]
+    resume_suggestions: List[str]
+    ats_compatibility_feedback: str
+
+class PlacementDriveCreate(BaseModel):
+    company: str
+    difficulty: str
+
+class PlacementDriveSubmit(BaseModel):
+    answers: List[AnswerSubmit]
+    code: str
+    problem_title: str
+    language: str
+    mcq_answers: List[dict]
+
+class PlacementDriveResponse(BaseModel):
+    id: int
+    user_id: int
+    company: str
+    difficulty: str
+    mcq_score: float
+    coding_score: float
+    verbal_score: float
+    overall_score: float
+    status: str
+    feedback: Optional[str] = None
+    created_at: datetime
 
     class Config:
         from_attributes = True

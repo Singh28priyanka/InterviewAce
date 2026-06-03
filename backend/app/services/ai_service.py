@@ -153,34 +153,63 @@ def generate_questions(interview_type: str, difficulty: str, skills: list, histo
     """Legacy question generator (unused now, we query from question bank)"""
     return generate_dynamic_questions(interview_type, difficulty, skills, 3)
 
-def evaluate_answer(question_text: str, user_answer: str, ideal_answer: str) -> dict:
-    """Evaluates a user answer"""
+def evaluate_answer(question_text: str, user_answer: str, ideal_answer: str, wpm: float = None, filler_words_count: int = None) -> dict:
+    """Evaluates a user answer with optional speaking pace and filler words counts"""
     if use_mock:
+        is_behavioral = any(kw in question_text.lower() for kw in ["tell me", "why", "describe", "conflict", "strength", "weakness", "journey", "fail", "lead", "star"])
+        if is_behavioral:
+            communication_fb = (
+                "[STAR]\n"
+                "- Situation: You clearly described the project team size and goal. (Score: 8/10)\n"
+                "- Task: Defined the conflicting deadlines and feature priorities. (Score: 7/10)\n"
+                "- Action: Showed strong communication by calling a alignment meeting. (Score: 9/10)\n"
+                "- Result: Delivered the module on-time, reducing latency by 12%. (Score: 8/10)"
+            )
+        else:
+            communication_fb = "Clear and logical flow. You spoke with good structure but could use more precise terminology."
+            if wpm:
+                communication_fb += f" Speaking rate of {wpm} WPM is optimal."
+            if filler_words_count:
+                communication_fb += f" Noticed {filler_words_count} verbal filler pauses."
+
         return {
             "score": 7.8,
             "feedback_accuracy": "The answer is conceptually correct and covers the main topics (e.g. definitions and usage).",
-            "feedback_communication": "Clear and logical flow. You spoke with good structure but could use more precise terminology.",
+            "feedback_communication": communication_fb,
             "feedback_depth": "Good understanding shown. Adding a concrete code snippet or real-world project example would make it stand out.",
-            "feedback_confidence": "Tone is positive and assertive. Avoid using filler words like 'uh', 'um', or 'like' in the middle of sentences.",
+            "feedback_confidence": "Tone is positive and assertive." + (f" Try to reduce the {filler_words_count} verbal pauses." if filler_words_count and filler_words_count > 3 else ""),
             "feedback_clarity": "The core message is understandable, though a bit wordy in the middle.",
             "feedback_strengths": "Strong conceptual foundation, structured delivery, and accurate examples.",
             "feedback_weaknesses": "Missed referencing edge cases (e.g., memory management, thread safety) and used slight pauses.",
             "suggested_answer": ideal_answer
         }
         
+    extra_details = ""
+    if wpm is not None:
+        extra_details += f"\nCandidate Speaking Pace: {wpm} words per minute (normal/optimal conversational pace is 110-150 WPM)."
+    if filler_words_count is not None:
+        extra_details += f"\nCandidate Filler Words count (verbal pauses like 'um', 'uh', 'like'): {filler_words_count} times."
+
     prompt = f"""
     Evaluate the user's answer to the interview question below:
     
     Question: {question_text}
     Ideal Points: {ideal_answer}
     User's Answer: {user_answer}
+    {extra_details}
+    
+    CRITICAL INSTRUCTION FOR BEHAVIORAL/HR QUESTIONS:
+    If this is a behavioral/HR question, perform a STAR Method analysis (Situation, Task, Action, Result).
+    In the 'feedback_communication' field of your JSON response, you MUST prefix the string with '[STAR]' and structure it as:
+    '[STAR]\n- Situation: [your feedback on how they described the situation] (Score: X/10)\n- Task: [your feedback on how they described the task/challenge] (Score: X/10)\n- Action: [your feedback on how they described their specific actions] (Score: X/10)\n- Result: [your feedback on how they described the outcome/numbers] (Score: X/10)'
+    Make sure each letter is explicitly evaluated.
     
     Return a JSON object containing:
     - score (float out of 10)
     - feedback_accuracy (string, evaluate technical correctness)
-    - feedback_communication (string, evaluate speaking/writing structure)
+    - feedback_communication (string, evaluate speaking/writing structure and pace)
     - feedback_depth (string, detail technical depth shown or missed)
-    - feedback_confidence (string, assess confidence indicators based on text style)
+    - feedback_confidence (string, assess confidence indicators based on text style and verbal filler pauses)
     - feedback_clarity (string, assess how clear and concise the response was)
     - feedback_strengths (string)
     - feedback_weaknesses (string)
@@ -194,7 +223,7 @@ def evaluate_answer(question_text: str, user_answer: str, ideal_answer: str) -> 
         except Exception:
             pass
             
-    return evaluate_answer(question_text, user_answer, ideal_answer)
+    return evaluate_answer(question_text, user_answer, ideal_answer, wpm, filler_words_count)
 
 def review_code(problem_title: str, language: str, code: str) -> dict:
     """Reviews coding solution for complexity, readability, optimization"""
@@ -258,3 +287,76 @@ def generate_roadmap(performance_summary: str) -> dict:
             pass
             
     return generate_roadmap(performance_summary)
+
+
+def get_code_hint(problem_title: str, language: str, code: str, chat_history: list, message: str) -> str:
+    """Generates code hints using Gemini as an interviewer without giving the full code"""
+    if use_mock:
+        return "Think about using a two-pointer approach here. If the array is sorted, you can check if the sum of elements at the left and right pointers matches the target, then move pointers closer."
+
+    history_str = ""
+    for msg in chat_history:
+        role = "Candidate" if msg.get("role") == "user" else "Interviewer"
+        history_str += f"{role}: {msg.get('content')}\n"
+
+    prompt = f"""
+    You are a friendly technical coding interviewer conducting a mock interview.
+    The candidate is solving the problem '{problem_title}' in {language}.
+    
+    Current Code:
+    {code}
+    
+    Chat History:
+    {history_str}
+    
+    Candidate's Question/Message:
+    {message}
+    
+    Provide a brief (2-3 sentences) hint or guidance.
+    CRITICAL RULE: DO NOT write the full code solution. Give conceptual tips, ask guiding questions, or point out edge cases to help them solve it themselves.
+    """
+    
+    response = call_gemini(prompt, response_json=False)
+    if response:
+        return response.strip()
+    return "Think about how you can check the values iteratively. Are there any libraries or datastructures (like a map or stack) that could simplify tracking?"
+
+def match_resume_to_jd(parsed_resume: dict, jd_text: str) -> dict:
+    """Compares parsed resume details with a target Job Description using Gemini"""
+    if use_mock:
+        return {
+            "match_score": 75.0,
+            "missing_keywords": ["FastAPI", "Docker", "CI/CD Pipelines", "System Design"],
+            "resume_suggestions": [
+                "Detail your backend APIs experience by referencing FastAPI explicitly rather than just 'Python backend'.",
+                "Add a deployment section detailing any experience with Docker, cloud providers, or CI/CD pipelines.",
+                "Incorporate system design terminology (sharding, caching, load balancing) in your E-commerce project description."
+            ],
+            "ats_compatibility_feedback": "The resume has a solid layout and covers core DSA/OOP concepts, but lacks terms relating to modern deployment practices (Docker, Kubernetes) and scaling which are highlighted in the job description."
+        }
+
+    prompt = f"""
+    Compare the following candidate profile with the target Job Description (JD).
+    
+    Candidate Profile:
+    - Skills: {parsed_resume.get('skills', [])}
+    - Projects: {parsed_resume.get('projects', [])}
+    
+    Target Job Description:
+    {jd_text}
+    
+    Return a JSON object containing:
+    - match_score (float between 0 and 100 assessing suitability)
+    - missing_keywords (list of strings representing critical skills/keywords in the JD that are not evident in the candidate profile)
+    - resume_suggestions (list of strings outlining concrete improvements to better align the resume to the JD)
+    - ats_compatibility_feedback (string summarizing overall compatibility and layout advice)
+    """
+
+    response = call_gemini(prompt, response_json=True)
+    if response:
+        try:
+            return json.loads(response)
+        except Exception:
+            pass
+
+    return match_resume_to_jd(parsed_resume, jd_text)

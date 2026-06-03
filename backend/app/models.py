@@ -18,6 +18,7 @@ class User(Base):
     submissions = relationship("CodingSubmission", back_populates="user", cascade="all, delete-orphan")
     roadmap = relationship("Roadmap", uselist=False, back_populates="user", cascade="all, delete-orphan")
     history = relationship("UserQuestionHistory", back_populates="user", cascade="all, delete-orphan")
+    drives = relationship("PlacementDrive", back_populates="user", cascade="all, delete-orphan")
 
 class Resume(Base):
     __tablename__ = "resumes"
@@ -130,3 +131,21 @@ class CodingProblem(Base):
     template_python = Column(Text, nullable=False)
     template_java = Column(Text, nullable=False)
     template_cpp = Column(Text, nullable=False)
+
+
+class PlacementDrive(Base):
+    __tablename__ = "placement_drives"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    company = Column(String(50), nullable=False)      # Google, Amazon, Microsoft, TCS, Infosys, Wipro, Accenture
+    difficulty = Column(String(20), nullable=False)   # Easy, Medium, Hard
+    mcq_score = Column(Float, default=0.0)
+    coding_score = Column(Float, default=0.0)
+    verbal_score = Column(Float, default=0.0)
+    overall_score = Column(Float, default=0.0)
+    status = Column(String(20), default="In_Progress") # In_Progress, Completed
+    feedback = Column(Text, nullable=True)            # JSON string
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="drives")

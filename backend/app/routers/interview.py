@@ -158,19 +158,25 @@ def submit_answers(
             detail="Interview already evaluated and completed"
         )
         
-    answers_map = {ans.question_id: ans.answer_text for ans in payload.answers}
+    answers_objs = {ans.question_id: ans for ans in payload.answers}
     
     total_score = 0.0
     evaluated_count = 0
     
     for db_q in db_interview.questions:
-        user_ans = answers_map.get(db_q.id, "")
+        ans_obj = answers_objs.get(db_q.id)
+        user_ans = ans_obj.answer_text if ans_obj else ""
+        wpm = ans_obj.wpm if ans_obj else None
+        filler_cnt = ans_obj.filler_words_count if ans_obj else None
+        
         db_q.user_answer = user_ans
         
         eval_result = ai_service.evaluate_answer(
             question_text=db_q.question_text,
             user_answer=user_ans,
-            ideal_answer=db_q.ideal_answer
+            ideal_answer=db_q.ideal_answer,
+            wpm=wpm,
+            filler_words_count=filler_cnt
         )
         
         db_q.score = eval_result.get("score", 0.0)

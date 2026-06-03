@@ -24,3 +24,7 @@ frontend/dist/
 # Operating System Files
 .DS_Store
 Thumbs.db
+
+# Python caches
+__pycache__/
+*.pyc

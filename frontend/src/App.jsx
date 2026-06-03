@@ -9,6 +9,7 @@ import ResumeAnalyzer from "./pages/ResumeAnalyzer";
 import MockInterview from "./pages/MockInterview";
 import CodingInterview from "./pages/CodingInterview";
 import Analytics from "./pages/Analytics";
+import PlacementDrives from "./pages/PlacementDrives";
 import Profile from "./pages/Profile";
 import Recruiter from "./pages/Recruiter";
 import { RefreshCw } from "lucide-react";
@@ -47,6 +48,7 @@ function NavigationLayout() {
           <Route path="/interview" element={<PrivateRoute allowedRoles={["candidate"]}><MockInterview /></PrivateRoute>} />
           <Route path="/coding" element={<PrivateRoute allowedRoles={["candidate"]}><CodingInterview /></PrivateRoute>} />
           <Route path="/analytics" element={<PrivateRoute allowedRoles={["candidate"]}><Analytics /></PrivateRoute>} />
+          <Route path="/drives" element={<PrivateRoute allowedRoles={["candidate"]}><PlacementDrives /></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="/recruiter" element={<PrivateRoute allowedRoles={["recruiter"]}><Recruiter /></PrivateRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -84,3 +84,28 @@ def get_my_resume(
             detail="No resume uploaded yet"
         )
     return resume
+
+
+@router.post("/match-jd", response_model=schemas.JobDescriptionMatchResponse)
+def match_jd(
+    payload: schemas.JobDescriptionMatchRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(security.get_current_user)
+):
+    resume = db.query(models.Resume).filter(models.Resume.user_id == current_user.id).first()
+    if not resume:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No resume uploaded yet. Please upload your resume first."
+        )
+    
+    import json
+    parsed_resume = {
+        "skills": json.loads(resume.parsed_skills) if resume.parsed_skills else [],
+        "projects": json.loads(resume.parsed_projects) if resume.parsed_projects else [],
+        "certifications": json.loads(resume.parsed_certifications) if resume.parsed_certifications else [],
+        "education": json.loads(resume.parsed_education) if resume.parsed_education else []
+    }
+    
+    match_result = ai_service.match_resume_to_jd(parsed_resume, payload.jd_text)
+    return match_result

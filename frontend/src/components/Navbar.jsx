@@ -36,6 +36,9 @@ export default function Navbar() {
             <Link to="/interview" className={linkClass("/interview")}>
               <Video className="w-4 h-4" /> Mock Interview
             </Link>
+            <Link to="/drives" className={linkClass("/drives")}>
+              <Briefcase className="w-4 h-4" /> Placement Drives
+            </Link>
             <Link to="/coding" className={linkClass("/coding")}>
               <Code className="w-4 h-4" /> Coding Panel
             </Link>

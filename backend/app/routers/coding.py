@@ -123,3 +123,18 @@ def submit_code(
     db.commit()
     db.refresh(db_sub)
     return db_sub
+
+
+@router.post("/hint", response_model=schemas.CodingHintResponse)
+def get_hint(
+    payload: schemas.CodingHintRequest,
+    current_user: models.User = Depends(security.get_current_user)
+):
+    hint = ai_service.get_code_hint(
+        problem_title=payload.problem_title,
+        language=payload.language,
+        code=payload.code,
+        chat_history=payload.chat_history,
+        message=payload.message
+    )
+    return {"hint": hint}

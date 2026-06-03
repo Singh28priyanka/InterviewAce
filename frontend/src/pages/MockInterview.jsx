@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { api } from "../utils/api";
-import { Video, Award, RefreshCw, ChevronRight, Mic, MicOff, Volume2, Play, CheckCircle2, ChevronLeft, BrainCircuit, AlertCircle } from "lucide-react";
+import { Video, Award, RefreshCw, ChevronRight, Mic, MicOff, Volume2, Play, CheckCircle2, ChevronLeft, BrainCircuit, AlertCircle, Sparkles } from "lucide-react";
 
 export default function MockInterview() {
   const [searchParams] = useSearchParams();
@@ -20,6 +20,10 @@ export default function MockInterview() {
   const [answers, setAnswers] = useState({});
   const [recording, setRecording] = useState(false);
   const [recognition, setRecognition] = useState(null);
+
+  // Audio metrics states
+  const [startTime, setStartTime] = useState(0);
+  const [answersMetadata, setAnswersMetadata] = useState({}); // { [qIdx]: { wpm: float, filler_words_count: int } }
 
   // Feedback/Review state
   const [reviewData, setReviewData] = useState(null);
@@ -42,9 +46,10 @@ export default function MockInterview() {
       rec.onresult = (event) => {
         const transcript = event.results[event.results.length - 1][0].transcript;
         const currentAns = answers[currentQuestionIndex] || "";
+        const updatedAns = currentAns ? `${currentAns} ${transcript}` : transcript;
         setAnswers({
           ...answers,
-          [currentQuestionIndex]: currentAns ? `${currentAns} ${transcript}` : transcript
+          [currentQuestionIndex]: updatedAns
         });
       };
       
@@ -82,9 +87,9 @@ export default function MockInterview() {
       });
       setInterview(data);
       setAnswers({});
+      setAnswersMetadata({});
       setCurrentQuestionIndex(0);
       setInProgress(true);
-      // Automatically speak the first question
       speakText(data.questions[0].question_text);
     } catch (err) {
       alert(err.message || "Failed to initiate mock session.");
@@ -94,6 +99,9 @@ export default function MockInterview() {
   };
 
   const handleNext = () => {
+    if (recording && recognition) {
+      stopRecordingSession();
+    }
     if (currentQuestionIndex < interview.questions.length - 1) {
       const nextIdx = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIdx);
@@ -102,6 +110,9 @@ export default function MockInterview() {
   };
 
   const handlePrev = () => {
+    if (recording && recognition) {
+      stopRecordingSession();
+    }
     if (currentQuestionIndex > 0) {
       const prevIdx = currentQuestionIndex - 1;
       setCurrentQuestionIndex(prevIdx);
@@ -124,25 +135,52 @@ export default function MockInterview() {
       return;
     }
     if (recording) {
-      recognition.stop();
-      setRecording(false);
+      stopRecordingSession();
     } else {
+      setStartTime(Date.now());
       recognition.start();
       setRecording(true);
     }
   };
 
+  const stopRecordingSession = () => {
+    recognition.stop();
+    setRecording(false);
+    
+    // Calculate speaking pace and filler words
+    const durationSec = (Date.now() - startTime) / 1000.0;
+    const currentAns = answers[currentQuestionIndex] || "";
+    const words = currentAns.trim().split(/\s+/).filter(x => x.length > 0).length;
+    
+    // Words per minute (Conversational optimal range: 110-150 WPM)
+    const calcWpm = durationSec > 2 && words > 0 ? Math.round((words / durationSec) * 60) : 120;
+    
+    // Filler words matches: um, uh, like, basically, actually, so
+    const matches = currentAns.toLowerCase().match(/\b(um|uh|like|basically|actually|so)\b/g);
+    const fillerCount = matches ? matches.length : 0;
+    
+    setAnswersMetadata({
+      ...answersMetadata,
+      [currentQuestionIndex]: {
+        wpm: calcWpm,
+        filler_words_count: fillerCount
+      }
+    });
+  };
+
   const handleSubmit = async () => {
     setLoading(true);
     if (recording && recognition) {
-      recognition.stop();
+      stopRecordingSession();
     }
     
-    // Format answers array
+    // Format answers array with optional speech metrics
     const submitPayload = {
       answers: interview.questions.map((q, idx) => ({
         question_id: q.id,
-        answer_text: answers[idx] || ""
+        answer_text: answers[idx] || "",
+        wpm: answersMetadata[idx]?.wpm || null,
+        filler_words_count: answersMetadata[idx]?.filler_words_count || null
       }))
     };
 
@@ -159,13 +197,23 @@ export default function MockInterview() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#070b13] flex items-center justify-center">
-        <RefreshCw className="w-8 h-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
+  const parseStar = (text) => {
+    if (!text || !text.startsWith("[STAR]")) return null;
+    const cleanText = text.replace("[STAR]", "").trim();
+    const result = { situation: "", task: "", action: "", result: "" };
+    
+    const sitMatch = cleanText.match(/-\s*Situation:\s*(.*?)(?=\s*-\s*(Task|Action|Result)|\s*$)/s);
+    const taskMatch = cleanText.match(/-\s*Task:\s*(.*?)(?=\s*-\s*(Situation|Action|Result)|\s*$)/s);
+    const actMatch = cleanText.match(/-\s*Action:\s*(.*?)(?=\s*-\s*(Situation|Task|Result)|\s*$)/s);
+    const resMatch = cleanText.match(/-\s*Result:\s*(.*?)(?=\s*-\s*(Situation|Task|Action)|\s*$)/s);
+    
+    if (sitMatch) result.situation = sitMatch[1].strip ? sitMatch[1].trim() : sitMatch[1];
+    if (taskMatch) result.task = taskMatch[1].strip ? taskMatch[1].trim() : taskMatch[1];
+    if (actMatch) result.action = actMatch[1].strip ? actMatch[1].trim() : actMatch[1];
+    if (resMatch) result.result = resMatch[1].strip ? resMatch[1].trim() : resMatch[1];
+    
+    return result;
+  };
 
   // Render 1: Detailed Feedback Dashboard
   if (reviewData) {
@@ -180,7 +228,7 @@ export default function MockInterview() {
           </div>
           <button
             onClick={() => { setReviewData(null); navigate("/interview"); }}
-            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-md"
+            className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-all shadow-md cursor-pointer"
           >
             Start New Simulator
           </button>
@@ -224,44 +272,82 @@ export default function MockInterview() {
         {/* Questions and feedback review */}
         <h2 className="text-lg font-extrabold text-white mt-8">Question Breakdown</h2>
         <div className="space-y-6">
-          {reviewData.questions.map((q, idx) => (
-            <div key={q.id} className="glass-panel p-6 rounded-2xl border-white/5 space-y-4 relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
-              <div className="flex justify-between items-start gap-4">
-                <span className="text-xs font-semibold bg-slate-800 border border-white/5 px-2.5 py-1 rounded-lg text-slate-400 uppercase tracking-wider">
-                  Question {idx + 1}
-                </span>
-                <span className="text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
-                  Score: {q.score}/10
-                </span>
-              </div>
-              <h3 className="text-base font-bold text-white">{q.question_text}</h3>
-              
-              <div className="space-y-2.5 bg-slate-900/30 border border-white/5 p-4 rounded-xl text-xs leading-relaxed">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <span className="text-slate-400 font-semibold block mb-1">Your response:</span>
-                    <p className="text-slate-300 italic">{q.user_answer || "No response provided."}</p>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 font-semibold block mb-1">Suggested ideal response:</span>
-                    <p className="text-slate-300">{q.ideal_answer}</p>
+          {reviewData.questions.map((q, idx) => {
+            const starData = parseStar(q.feedback_communication);
+            return (
+              <div key={q.id} className="glass-panel p-6 rounded-2xl border-white/5 space-y-4 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>
+                <div className="flex justify-between items-start gap-4">
+                  <span className="text-xs font-semibold bg-slate-800 border border-white/5 px-2.5 py-1 rounded-lg text-slate-400 uppercase tracking-wider">
+                    Question {idx + 1}
+                  </span>
+                  <span className="text-sm font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg">
+                    Score: {q.score}/10
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-white">{q.question_text}</h3>
+                
+                <div className="space-y-2.5 bg-slate-900/30 border border-white/5 p-4 rounded-xl text-xs leading-relaxed">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-1">Your response:</span>
+                      <p className="text-slate-300 italic">{q.user_answer || "No response provided."}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 font-semibold block mb-1">Suggested ideal response:</span>
+                      <p className="text-slate-300">{q.ideal_answer}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800/40 text-xs">
-                <div>
-                  <span className="text-emerald-400 font-bold block mb-1">Strengths</span>
-                  <p className="text-slate-400 leading-relaxed">{q.feedback_strengths || "Strong response syntax and concepts."}</p>
-                </div>
-                <div>
-                  <span className="text-yellow-500 font-bold block mb-1">Areas of improvement</span>
-                  <p className="text-slate-400 leading-relaxed">{q.feedback_weaknesses || "Detail edge conditions or scaling aspects."}</p>
+                {/* Render STAR card if applicable */}
+                {starData && (
+                  <div className="p-4 rounded-xl bg-blue-950/15 border border-blue-500/15 space-y-3">
+                    <span className="text-xs font-bold text-blue-400 flex items-center gap-1">
+                      <Sparkles className="w-3.5 h-3.5" /> AI STAR Method Behavioral Evaluation
+                    </span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs leading-relaxed">
+                      {starData.situation && (
+                        <div className="p-2.5 rounded bg-slate-950/40">
+                          <span className="font-extrabold text-white block mb-0.5">S - Situation</span>
+                          <p className="text-slate-400">{starData.situation}</p>
+                        </div>
+                      )}
+                      {starData.task && (
+                        <div className="p-2.5 rounded bg-slate-950/40">
+                          <span className="font-extrabold text-white block mb-0.5">T - Task</span>
+                          <p className="text-slate-400">{starData.task}</p>
+                        </div>
+                      )}
+                      {starData.action && (
+                        <div className="p-2.5 rounded bg-slate-950/40">
+                          <span className="font-extrabold text-white block mb-0.5">A - Action</span>
+                          <p className="text-slate-400">{starData.action}</p>
+                        </div>
+                      )}
+                      {starData.result && (
+                        <div className="p-2.5 rounded bg-slate-950/40">
+                          <span className="font-extrabold text-white block mb-0.5">R - Result</span>
+                          <p className="text-slate-400">{starData.result}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-800/40 text-xs">
+                  <div>
+                    <span className="text-emerald-400 font-bold block mb-1">Strengths</span>
+                    <p className="text-slate-400 leading-relaxed">{q.feedback_strengths || "Strong response syntax and concepts."}</p>
+                  </div>
+                  <div>
+                    <span className="text-yellow-500 font-bold block mb-1">Areas of improvement</span>
+                    <p className="text-slate-400 leading-relaxed">{q.feedback_weaknesses || "Detail edge conditions or scaling aspects."}</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -288,60 +374,76 @@ export default function MockInterview() {
             {activeQ.question_text}
           </h2>
 
+          {/* Animated audio waveform during recording */}
+          {recording && (
+            <div className="flex items-center justify-center gap-1.5 my-6 h-8">
+              <span className="w-1 bg-blue-500 rounded h-3 animate-bounce" style={{ animationDelay: "0ms" }}></span>
+              <span className="w-1 bg-blue-500 rounded h-7 animate-bounce" style={{ animationDelay: "150ms" }}></span>
+              <span className="w-1 bg-blue-500 rounded h-4 animate-bounce" style={{ animationDelay: "300ms" }}></span>
+              <span className="w-1 bg-blue-500 rounded h-8 animate-bounce" style={{ animationDelay: "450ms" }}></span>
+              <span className="w-1 bg-blue-500 rounded h-5 animate-bounce" style={{ animationDelay: "600ms" }}></span>
+              <span className="w-1 bg-blue-500 rounded h-2 animate-bounce" style={{ animationDelay: "750ms" }}></span>
+            </div>
+          )}
+
           <div className="flex justify-center gap-3">
             <button
               onClick={() => speakText(activeQ.question_text)}
-              className="p-3 bg-slate-800 hover:bg-slate-755 text-blue-400 rounded-full border border-white/5 transition-all"
+              className="p-3 bg-slate-800 hover:bg-slate-700/60 text-blue-400 rounded-full border border-white/5 transition-all cursor-pointer"
               title="Hear Question"
             >
               <Volume2 className="w-5 h-5" />
             </button>
             <button
               onClick={toggleRecording}
-              className={`p-3 rounded-full border transition-all ${
+              className={`p-3 rounded-full border transition-all cursor-pointer ${
                 recording 
-                  ? "bg-red-600 border-red-500 text-white animate-pulse" 
-                  : "bg-slate-800 hover:bg-slate-755 border-white/5 text-slate-300"
+                  ? "bg-red-500/20 text-red-500 border-red-500/30 hover:bg-red-500/30 animate-pulse" 
+                  : "bg-slate-800 hover:bg-slate-700/60 text-slate-300 border-white/5"
               }`}
-              title={recording ? "Stop Recording" : "Voice Answer"}
+              title={recording ? "Stop Voice Input" : "Record Voice Answer"}
             >
               {recording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
             </button>
           </div>
 
-          <div className="text-left space-y-2">
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider">Your Answer</label>
+          <div className="max-w-2xl mx-auto text-left space-y-2">
+            <span className="text-xs text-slate-400 font-semibold uppercase">Your Answer Transcript:</span>
+            <div className="min-h-32 p-4 rounded-xl bg-slate-950/80 border border-slate-900 text-sm italic leading-relaxed text-slate-300">
+              {answers[currentQuestionIndex] || "No speech detected yet. Click the microphone button and start speaking, or type directly..."}
+            </div>
+            
+            {/* Direct text input alternative */}
             <textarea
-              rows="6"
               value={answers[currentQuestionIndex] || ""}
               onChange={(e) => setAnswers({ ...answers, [currentQuestionIndex]: e.target.value })}
-              placeholder={recording ? "Transcribing audio input..." : "Input your answer. Speak aloud or type details here."}
-              className="w-full bg-slate-950/60 border border-slate-800 rounded-xl p-4 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
+              placeholder="Or type/edit your response here..."
+              className="w-full bg-slate-900/40 border border-slate-800 rounded-xl p-3 text-xs leading-relaxed outline-none focus:border-blue-500 resize-none h-16"
             />
           </div>
 
-          <div className="flex justify-between items-center pt-6 border-t border-slate-800/40">
+          <div className="flex justify-between items-center pt-4 border-t border-slate-800/40 max-w-2xl mx-auto">
             <button
               onClick={handlePrev}
               disabled={currentQuestionIndex === 0}
-              className="flex items-center gap-1.5 text-slate-400 hover:text-white disabled:opacity-30 text-sm font-semibold transition-all"
+              className="flex items-center gap-1 text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed text-xs font-semibold"
             >
               <ChevronLeft className="w-4 h-4" /> Previous
             </button>
-            
+
             {currentQuestionIndex < interview.questions.length - 1 ? (
               <button
                 onClick={handleNext}
-                className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-755 border border-white/5 text-white px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1 shadow-md shadow-blue-500/10 cursor-pointer"
               >
-                Next <ChevronRight className="w-4 h-4" />
+                Next Question <ChevronRight className="w-4 h-4" />
               </button>
             ) : (
               <button
                 onClick={handleSubmit}
-                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl text-sm font-bold transition-all shadow-md"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-5 py-2.5 rounded-lg flex items-center gap-1.5 shadow-md shadow-emerald-500/10 cursor-pointer"
               >
-                Finish & Evaluate
+                Submit & End Session
               </button>
             )}
           </div>
@@ -350,67 +452,82 @@ export default function MockInterview() {
     );
   }
 
-  // Render 3: Configure Interview Setup Screen
+  // Render 3: Start Screen Configurations
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6 text-slate-200">
       <div className="glass-panel p-8 rounded-2xl relative overflow-hidden border-white/5">
-        <div className="absolute top-0 right-0 w-60 h-60 bg-blue-600/5 rounded-full blur-[70px] pointer-events-none"></div>
+        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-600/5 rounded-full blur-[80px] pointer-events-none"></div>
         
-        <h1 className="text-2xl font-extrabold text-white flex items-center gap-2 mb-2">
-          <Video className="w-6 h-6 text-blue-500" /> AI Mock Interview Simulator
-        </h1>
-        <p className="text-slate-400 text-sm">
-          Simulate behavioral HR mock screens or custom Technical questions aligned to your resume. Get tested and receive graded scoring.
-        </p>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Choose Session Topic</label>
-            <div className="grid grid-cols-2 gap-3">
-              {["Technical", "HR", "Google Mode", "Amazon Mode", "TCS/NQT", "Infosys Mode"].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setInterviewType(mode)}
-                  className={`p-3 rounded-xl border text-xs font-bold text-center transition-all duration-200 ${
-                    interviewType === mode
-                      ? "bg-blue-600/15 border-blue-500 text-blue-400"
-                      : "border-slate-800 bg-transparent text-slate-400 hover:border-slate-700"
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2.5">Difficulty Profile</label>
-            <div className="grid grid-cols-3 gap-3">
-              {["Easy", "Medium", "Hard"].map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  onClick={() => setDifficulty(level)}
-                  className={`p-3 rounded-xl border text-xs font-bold text-center transition-all duration-200 ${
-                    difficulty === level
-                      ? "bg-blue-600/15 border-blue-500 text-blue-400"
-                      : "border-slate-800 bg-transparent text-slate-400 hover:border-slate-700"
-                  }`}
-                >
-                  {level}
-                </button>
-              ))}
-            </div>
-          </div>
+        <div className="max-w-xl space-y-4">
+          <h1 className="text-3xl font-extrabold text-white">AI Mock Interview Simulator</h1>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Experience real-world placement parameters. Select a company style or general tech category, adjust your target difficulty, and speak your answers. Our AI evaluates accuracy, depth, and speaking metrics.
+          </p>
         </div>
 
-        <button
-          onClick={handleStart}
-          className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl text-sm transition-all mt-8 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/10"
-        >
-          <Play className="w-4 h-4 fill-current" /> Start Interview Simulator
-        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+          {/* Form inputs */}
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-slate-400 font-bold uppercase">Select Target Style:</label>
+              <select
+                value={interviewType}
+                onChange={(e) => setInterviewType(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="HR behavioral">General HR Behavioral</option>
+                <option value="Technical">General Core Technical</option>
+                <option value="Google SDE">Google SWE Interview</option>
+                <option value="Amazon SDE">Amazon SDE Interview</option>
+                <option value="Microsoft SWE">Microsoft SWE Interview</option>
+                <option value="TCS NQT">TCS Technical Interview</option>
+                <option value="Infosys System Engineer">Infosys Interview</option>
+                <option value="Wipro Project Engineer">Wipro Interview</option>
+                <option value="Accenture Associate">Accenture Interview</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-slate-400 font-bold uppercase">Difficulty Level:</label>
+              <select
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="Easy">Easy (Entry Level)</option>
+                <option value="Medium">Medium (Associate)</option>
+                <option value="Hard">Hard (Expert / Tier-1)</option>
+              </select>
+            </div>
+
+            <button
+              onClick={handleStart}
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl transition-all shadow-md shadow-blue-500/10 cursor-pointer text-sm mt-4 flex items-center justify-center gap-1.5"
+            >
+              <Video className="w-4 h-4" /> Start Mock Simulator
+            </button>
+          </div>
+
+          <div className="rounded-2xl bg-slate-900/40 border border-white/5 p-6 space-y-4 flex flex-col justify-center">
+            <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <BrainCircuit className="w-4 h-4 text-purple-400" /> Simulator Parameters
+            </h4>
+            <ul className="space-y-3 text-xs text-slate-400 leading-relaxed">
+              <li className="flex gap-2">
+                <span className="text-blue-500 font-bold">&bull;</span>
+                <span>Includes **4 total questions**: 2 generated dynamically from your resume skills and 2 pulled from the question bank.</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-blue-500 font-bold">&bull;</span>
+                <span>Speech metrics track your speaking rate (optimal is 110-150 words per minute).</span>
+              </li>
+              <li className="flex gap-2">
+                <span className="text-blue-500 font-bold">&bull;</span>
+                <span>Behavioral answers are analyzed using the structured **STAR** method logic.</span>
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );
