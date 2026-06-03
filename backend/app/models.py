@@ -117,3 +117,16 @@ class UserQuestionHistory(Base):
 
     user = relationship("User", back_populates="history")
     question_bank = relationship("QuestionBank")
+
+class CodingProblem(Base):
+    __tablename__ = "coding_problems"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(100), unique=True, index=True, nullable=False)
+    description = Column(Text, nullable=False)
+    difficulty = Column(String(20), index=True, nullable=False)   # Easy, Medium, Hard
+    company = Column(String(100), index=True, nullable=False)      # Google, Amazon, Microsoft, TCS, Infosys, Wipro, Accenture, General
+    test_cases = Column(Text, nullable=False)                     # JSON string
+    template_python = Column(Text, nullable=False)
+    template_java = Column(Text, nullable=False)
+    template_cpp = Column(Text, nullable=False)

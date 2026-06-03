@@ -128,3 +128,16 @@ class RoadmapResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class CodingProblemResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    difficulty: str
+    company: str
+    template_python: str
+    template_java: str
+    template_cpp: str
+
+    class Config:
+        from_attributes = True
