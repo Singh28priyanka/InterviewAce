@@ -68,12 +68,71 @@ def parse_resume(pdf_text: str) -> dict:
     }
 
 def generate_dynamic_questions(interview_type: str, difficulty: str, skills: list, count: int = 2) -> list:
-    """Generates 2-3 dynamic interview questions using Gemini with custom templates for companies"""
+    """Generates 2-3 dynamic interview questions using Gemini with custom templates for companies/roles"""
     skills_str = ", ".join(skills) if skills else "OOP, DSA, Databases, System Design"
     
+    # Parse role & round if embedded
+    job_role = "Software Engineer"
+    round_type = "Technical"
+    if "|" in interview_type:
+        parts = interview_type.split("|")
+        job_role = parts[0].strip()
+        round_type = parts[1].strip()
+    elif "(" in interview_type:
+        parts = interview_type.split("(")
+        job_role = parts[0].strip()
+        round_type = parts[1].replace(")", "").strip()
+    else:
+        job_role = interview_type.strip()
+
     if use_mock:
-        # High fidelity mock generator for company specific questions
-        if "GOOGLE" in interview_type.upper():
+        # High fidelity mock generator for role-specific questions
+        if "PRODUCT MANAGER" in job_role.upper():
+            if "BEHAVIORAL" in round_type.upper():
+                return [
+                    {
+                        "question_text": "Tell me about a time when you had to make a product decision without user data. What was the outcome?",
+                        "ideal_answer": "Utilize a structured approach: state the initial problem, outline constraints, detail alignment with business goals, and explain retrospective validation."
+                    },
+                    {
+                        "question_text": "How do you handle a conflict between engineering and design regarding a critical UI feature timeline?",
+                        "ideal_answer": "Prioritize user value and tech debt tradeoff analysis. Organize cross-functional sessions to establish a phased release schedule."
+                    }
+                ]
+            else:
+                return [
+                    {
+                        "question_text": "How would you design a monetization strategy for a new remote job hunting platform?",
+                        "ideal_answer": "Detail value propositions, customer segments (job seekers vs. recruiters), subscription models, premium features, and metric tracking (ARPU, LTV)."
+                    },
+                    {
+                        "question_text": "What metrics would you track to measure the success of a newly launched video mock interview module?",
+                        "ideal_answer": "Define north-star metrics (user retention, completion rate) and behavioral metrics (average sessions per week, NPS)."
+                    }
+                ]
+        elif "DATA" in job_role.upper():
+            return [
+                {
+                    "question_text": "Explain the difference between bagging and boosting algorithms. When would you prefer boosting?",
+                    "ideal_answer": "Explain variance reduction (bagging/Random Forest) vs bias reduction (boosting/XGBoost). Prefer boosting when training data is clean and accuracy is the primary driver."
+                },
+                {
+                    "question_text": "How do you design an A/B test pipeline to measure a new landing page conversion rate improvement?",
+                    "ideal_answer": "Outline sample size estimation using power analysis, randomization, setting the significance level (alpha), and calculating p-value."
+                }
+            ]
+        elif "HR" in job_role.upper():
+            return [
+                {
+                    "question_text": "How would you handle a high-performing employee who is causing cultural friction within the team?",
+                    "ideal_answer": "Discuss active listening, scheduling 1-on-1 feedback sessions, setting behavioral expectations, and balancing output vs team morale."
+                },
+                {
+                    "question_text": "What is your strategy for designing an inclusive and objective virtual recruiting process?",
+                    "ideal_answer": "Discuss standardized structured rubrics, blind resume assessments, diverse interview panels, and unconscious bias training."
+                }
+            ]
+        elif "GOOGLE" in job_role.upper():
             return [
                 {
                     "question_text": "Describe how you would design a globally distributed cache system (like Memcached) for Google Search. How do you handle consistency?",
@@ -84,7 +143,7 @@ def generate_dynamic_questions(interview_type: str, difficulty: str, skills: lis
                     "ideal_answer": "Use a Min-Heap and a Max-Heap. Maintain heaps sizes balanced (difference <= 1). Median is root of the larger heap, or average of both roots if sizes are equal."
                 }
             ]
-        elif "AMAZON" in interview_type.upper():
+        elif "AMAZON" in job_role.upper():
             return [
                 {
                     "question_text": "Amazon Customer Experience: How would you design a product recommendation system that scales to 100M+ active daily users?",
@@ -95,7 +154,7 @@ def generate_dynamic_questions(interview_type: str, difficulty: str, skills: lis
                     "ideal_answer": "Explain the priority of immediate fallback systems, clear communication, and post-mortem review to prevent repeated client outages."
                 }
             ]
-        elif "TCS" in interview_type.upper() or "INFOSYS" in interview_type.upper() or "WIPRO" in interview_type.upper() or "ACCENTURE" in interview_type.upper():
+        elif "TCS" in job_role.upper() or "INFOSYS" in job_role.upper() or "WIPRO" in job_role.upper() or "ACCENTURE" in job_role.upper():
             return [
                 {
                     "question_text": f"Explain compilation phases and exception handling hierarchies in {skills[0] if skills else 'programming'}.",
@@ -120,23 +179,19 @@ def generate_dynamic_questions(interview_type: str, difficulty: str, skills: lis
 
     # Gemini call
     company_style = ""
-    if "GOOGLE" in interview_type.upper():
+    if "GOOGLE" in job_role.upper():
         company_style = "Google-style technical questions focusing on high-performance scale, system design, and advanced data structures (graphs, trees)."
-    elif "AMAZON" in interview_type.upper():
+    elif "AMAZON" in job_role.upper():
         company_style = "Amazon-style technical questions focusing on distributed systems, optimization, and Amazon Leadership Principles."
-    elif "MICROSOFT" in interview_type.upper():
+    elif "MICROSOFT" in job_role.upper():
         company_style = "Microsoft-style technical questions focusing on low-level resource management, system APIs, OS concepts, and algorithmic efficiency."
-    elif "TCS" in interview_type.upper() or "INFOSYS" in interview_type.upper() or "WIPRO" in interview_type.upper() or "ACCENTURE" in interview_type.upper():
+    elif "TCS" in job_role.upper() or "INFOSYS" in job_role.upper() or "WIPRO" in job_role.upper() or "ACCENTURE" in job_role.upper():
         company_style = "Service company style questions focusing on core programming syntax (Java/Python), SQL queries, basic DSA (Arrays/Linked Lists), and OOP concepts."
     
     prompt = f"""
-    Generate {count} unique and highly specific interview questions for a {interview_type} mock interview at {difficulty} level.
+    Generate {count} unique and highly specific interview questions for a {job_role} interview, specifically for the {round_type} round at {difficulty} level.
     The candidate has skills in: {skills_str}.
-    Style guideline: {company_style if company_style else 'Standard high-quality technical/behavioral questions.'}
-    
-    Provide the output in JSON format as a list of objects. Each object must have:
-    - question_text (string)
-    - ideal_answer (string detailing the key points that should be in a perfect answer)
+    Style guideline: {company_style if company_style else 'Standard high-quality questions matching the job role and round type.'}
     """
     
     response = call_gemini(prompt, response_json=True)

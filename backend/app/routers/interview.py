@@ -16,7 +16,14 @@ def start_interview(
 ):
     # 1. Map interview_type to relevant question bank categories
     target_categories = []
-    if "HR" in payload.interview_type.upper():
+    
+    # Check if there is a round_type embedded
+    round_type = "Technical"
+    if "(" in payload.interview_type:
+        parts = payload.interview_type.split("(")
+        round_type = parts[1].replace(")", "").strip()
+        
+    if "HR" in payload.interview_type.upper() or "BEHAVIORAL" in round_type.upper() or "WARM-UP" in round_type.upper():
         target_categories = ["HR"]
     else:
         # Technical or Company Mode

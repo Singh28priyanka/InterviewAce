@@ -9,7 +9,9 @@ export default function MockInterview() {
   const reviewId = searchParams.get("review");
 
   // Selection state
-  const [interviewType, setInterviewType] = useState("Technical");
+  const [targetStyle, setTargetStyle] = useState("General");
+  const [jobRole, setJobRole] = useState("Software Engineer");
+  const [roundType, setRoundType] = useState("Technical");
   const [difficulty, setDifficulty] = useState("Medium");
   const [inProgress, setInProgress] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -81,8 +83,9 @@ export default function MockInterview() {
   const handleStart = async () => {
     setLoading(true);
     try {
+      const formattedType = `${targetStyle} | ${jobRole} (${roundType})`;
       const data = await api.post("/api/interview/start", {
-        interview_type: interviewType,
+        interview_type: formattedType,
         difficulty: difficulty
       });
       setInterview(data);
@@ -461,7 +464,7 @@ export default function MockInterview() {
         <div className="max-w-xl space-y-4">
           <h1 className="text-3xl font-extrabold text-white">AI Mock Interview Simulator</h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Experience real-world placement parameters. Select a company style or general tech category, adjust your target difficulty, and speak your answers. Our AI evaluates accuracy, depth, and speaking metrics.
+            Experience real-world placement parameters. Select a company style, target job role, round type, and difficulty, then speak your answers. Our AI evaluates accuracy, depth, and speaking metrics.
           </p>
         </div>
 
@@ -469,21 +472,53 @@ export default function MockInterview() {
           {/* Form inputs */}
           <div className="space-y-4">
             <div className="flex flex-col gap-2">
-              <label className="text-xs text-slate-400 font-bold uppercase">Select Target Style:</label>
+              <label className="text-xs text-slate-400 font-bold uppercase">Company / Target Style:</label>
               <select
-                value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value)}
+                value={targetStyle}
+                onChange={(e) => setTargetStyle(e.target.value)}
                 className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 cursor-pointer"
               >
-                <option value="HR behavioral">General HR Behavioral</option>
-                <option value="Technical">General Core Technical</option>
-                <option value="Google SDE">Google SWE Interview</option>
-                <option value="Amazon SDE">Amazon SDE Interview</option>
-                <option value="Microsoft SWE">Microsoft SWE Interview</option>
-                <option value="TCS NQT">TCS Technical Interview</option>
-                <option value="Infosys System Engineer">Infosys Interview</option>
-                <option value="Wipro Project Engineer">Wipro Interview</option>
-                <option value="Accenture Associate">Accenture Interview</option>
+                <option value="General">General Platform Style</option>
+                <option value="Google">Google SWE Style</option>
+                <option value="Amazon">Amazon SDE Style</option>
+                <option value="Microsoft">Microsoft SWE Style</option>
+                <option value="TCS">TCS NQT Style</option>
+                <option value="Infosys">Infosys SE Style</option>
+                <option value="Wipro">Wipro Style</option>
+                <option value="Accenture">Accenture Style</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-slate-400 font-bold uppercase">Target Job Role:</label>
+              <select
+                value={jobRole}
+                onChange={(e) => setJobRole(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="Software Engineer">Software Engineer</option>
+                <option value="Product Manager">Product Manager</option>
+                <option value="Data Scientist">Data Scientist / Analyst</option>
+                <option value="Cybersecurity Analyst">Cybersecurity Analyst</option>
+                <option value="Web Designer">Web Designer / Frontend Developer</option>
+                <option value="Project Manager">Project Manager</option>
+                <option value="Financial Analyst">Financial Analyst</option>
+                <option value="Digital Marketing Specialist">Digital Marketing Specialist</option>
+                <option value="HR Generalist">HR Generalist / Specialist</option>
+              </select>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-xs text-slate-400 font-bold uppercase">Interview Round Type:</label>
+              <select
+                value={roundType}
+                onChange={(e) => setRoundType(e.target.value)}
+                className="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm text-white outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="Technical">Domain-Specific Technical</option>
+                <option value="Behavioral">Behavioral & Leadership (STAR)</option>
+                <option value="Warm-up">Warm-up & Ice Breaker</option>
+                <option value="System Design">System Design & Scale</option>
               </select>
             </div>
 
