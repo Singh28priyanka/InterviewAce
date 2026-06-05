@@ -99,7 +99,8 @@ def start_drive(
                 "python": selected_coding.template_python if selected_coding else "",
                 "java": selected_coding.template_java if selected_coding else "",
                 "cpp": selected_coding.template_cpp if selected_coding else ""
-            }
+            },
+            "test_cases": json.loads(selected_coding.test_cases) if (selected_coding and selected_coding.test_cases) else []
         } if selected_coding else None,
         "verbal_questions": [
             {

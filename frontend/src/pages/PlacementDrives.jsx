@@ -724,9 +724,15 @@ export default function PlacementDrives() {
   if (activeDrive) {
     let driveData = {};
     try {
-      driveData = JSON.parse(activeDrive.feedback);
+      if (activeDrive?.feedback) {
+        if (typeof activeDrive.feedback === "string") {
+          driveData = JSON.parse(activeDrive.feedback);
+        } else if (typeof activeDrive.feedback === "object" && activeDrive.feedback !== null) {
+          driveData = activeDrive.feedback;
+        }
+      }
     } catch (e) {
-      driveData = {};
+      console.error("Failed to parse activeDrive.feedback:", e);
     }
 
     const timerColor = timer < 300 ? "text-red-500 animate-pulse font-black" : "text-amber-400 font-bold";
@@ -801,23 +807,26 @@ export default function PlacementDrives() {
                     {driveData.mcqs[currentMcqIndex].question}
                   </h2>
 
-                  <div className="grid grid-cols-1 gap-3.5 pt-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
                     {driveData.mcqs[currentMcqIndex].options.map((opt, oIdx) => {
                       const isSelected = mcqAnswers[currentMcqIndex] === opt;
                       return (
                         <button
                           key={oIdx}
                           onClick={() => setMcqAnswers(prev => ({ ...prev, [currentMcqIndex]: opt }))}
-                          className={`w-full text-left p-4 rounded-xl border text-xs font-medium transition-all duration-150 cursor-pointer ${
+                          className={`w-full text-left p-4 rounded-xl border text-xs font-semibold transition-all duration-150 cursor-pointer flex items-center justify-between gap-3 ${
                             isSelected
                               ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/50 shadow-md shadow-cyan-500/5"
                               : "bg-slate-900/30 border-slate-800 text-slate-300 hover:bg-slate-900/50 hover:border-slate-750"
                           }`}
                         >
-                          <span className="font-bold text-[10px] bg-slate-900 px-2 py-1 rounded border border-slate-800 mr-3 text-slate-400">
-                            {String.fromCharCode(65 + oIdx)}
+                          <span className="flex items-center gap-3">
+                            <span className="font-bold text-[10px] bg-slate-900 px-2 py-1 rounded border border-slate-800 text-slate-400">
+                              {String.fromCharCode(65 + oIdx)}
+                            </span>
+                            {opt}
                           </span>
-                          {opt}
+                          {isSelected && <Check className="w-4 h-4 text-cyan-400 shrink-0" />}
                         </button>
                       );
                     })}
@@ -872,9 +881,28 @@ export default function PlacementDrives() {
 
                   <h2 className="text-lg font-bold text-white leading-relaxed">{driveData.coding_problem.title}</h2>
                   
-                  <div className="text-xs text-slate-400 leading-relaxed font-sans whitespace-pre-wrap select-text p-4 rounded-xl bg-slate-950/40 border border-slate-900 h-[280px] overflow-y-auto scrollbar-thin">
+                  <div className="text-xs text-slate-400 leading-relaxed font-sans whitespace-pre-wrap select-text p-4 rounded-xl bg-slate-950/40 border border-slate-900 h-[220px] overflow-y-auto scrollbar-thin">
                     {driveData.coding_problem.description}
                   </div>
+
+                  {/* Sample Input & Output section */}
+                  {driveData.coding_problem.test_cases && driveData.coding_problem.test_cases.length > 0 && (
+                    <div className="space-y-3 pt-3 border-t border-slate-800/60">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Sample Test Cases (LeetCode Style)</span>
+                      {driveData.coding_problem.test_cases.map((tc, tcIdx) => (
+                        <div key={tcIdx} className="bg-slate-950/60 p-3 rounded-xl border border-slate-900 space-y-2 text-[11px] font-mono">
+                          <div>
+                            <span className="text-indigo-400 font-bold block mb-0.5">Sample Input {tcIdx + 1}:</span>
+                            <pre className="text-slate-300 whitespace-pre-wrap bg-slate-950/40 p-2 rounded border border-white/5">{tc.input}</pre>
+                          </div>
+                          <div>
+                            <span className="text-emerald-400 font-bold block mb-0.5">Sample Output {tcIdx + 1}:</span>
+                            <pre className="text-slate-300 whitespace-pre-wrap bg-slate-950/40 p-2 rounded border border-white/5">{tc.expected}</pre>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <p className="text-slate-400">No coding problem configuration present.</p>
@@ -887,6 +915,7 @@ export default function PlacementDrives() {
                 {/* Control bar */}
                 <div className="bg-slate-950/60 p-3 border-b border-slate-800 flex justify-between items-center shrink-0">
                   <div className="flex items-center gap-4">
+                    <label className="text-xs font-bold text-slate-400">Solve in:</label>
                     <select
                       value={codingLanguage}
                       onChange={handleLanguageChange}
@@ -910,13 +939,21 @@ export default function PlacementDrives() {
                   </div>
                 </div>
 
+                {/* Editor Header Instructions */}
+                <div className="bg-slate-900/60 px-4 py-2 border-b border-slate-850 flex items-center justify-between text-[11px] text-slate-400">
+                  <span>Implement the function below inside the sandbox editor workspace.</span>
+                  <span className="font-bold text-indigo-400 flex items-center gap-1">
+                    <Code className="w-3.5 h-3.5" /> Language Target: {codingLanguage === "python" ? "Python 3" : codingLanguage === "java" ? "Java 17" : "C++11"}
+                  </span>
+                </div>
+
                 {/* Text editor box */}
                 <textarea
                   value={codingCode}
                   onChange={(e) => setCodingCode(e.target.value)}
                   className="flex-1 bg-slate-950/90 p-4 font-mono text-sm leading-relaxed text-blue-300 outline-none resize-none overflow-y-auto w-full select-text"
                   spellCheck="false"
-                  placeholder="Input your programming solution..."
+                  placeholder={`Write your code here in ${codingLanguage === "python" ? "Python" : codingLanguage === "java" ? "Java" : "C++"}...`}
                 />
               </div>
 
