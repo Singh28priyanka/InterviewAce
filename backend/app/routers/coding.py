@@ -22,6 +22,7 @@ def get_problems(
     
     problems = query.all()
     
+    import json
     problems_list = []
     for p in problems:
         problems_list.append({
@@ -33,7 +34,8 @@ def get_problems(
                 "python": p.template_python,
                 "java": p.template_java,
                 "cpp": p.template_cpp
-            }
+            },
+            "test_cases": json.loads(p.test_cases) if p.test_cases else []
         })
     return problems_list
 
@@ -82,6 +84,9 @@ def submit_code(
         db.add(db_sub)
         db.commit()
         db.refresh(db_sub)
+        db_sub.runtime = "N/A"
+        db_sub.memory_usage = "N/A"
+        db_sub.status = "Compilation Error"
         return db_sub
 
     # 2. Call AI evaluator for code structure, complexity, and feedback
@@ -122,6 +127,9 @@ def submit_code(
     db.add(db_sub)
     db.commit()
     db.refresh(db_sub)
+    db_sub.runtime = exec_result.get("runtime", "N/A")
+    db_sub.memory_usage = exec_result.get("memory_usage", "N/A")
+    db_sub.status = exec_result.get("status", "Accepted")
     return db_sub
 
 

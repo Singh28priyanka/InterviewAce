@@ -118,6 +118,9 @@ class CodingSubmissionResponse(BaseModel):
     readability_feedback: Optional[str] = None
     optimization_feedback: Optional[str] = None
     score: float
+    runtime: Optional[str] = "N/A"
+    memory_usage: Optional[str] = "N/A"
+    status: Optional[str] = "Accepted"
     created_at: datetime
 
     class Config:
